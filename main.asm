@@ -57,6 +57,7 @@ EntryPoint:
   
 MainLoop:
   call readKeys
+  call HandleInput
   call Pause
   call Scroll
   call UpdateObjects
@@ -67,6 +68,63 @@ MainLoop:
 
 
 SECTION "Functions", ROM0
+
+; Handle the rotation and the move
+HandleInput:
+  ; Check the status of paused
+  ld a, [paused]
+  cp 1
+  ret z ; If the status is paused, do nothing
+  
+  ; Get the status of key
+  ld a, [current]
+  
+  ; Check the rotation
+  bit 0, a
+  jr z, .checkLeft
+  call Rotate
+  
+.checkLeft:
+  bit KEY_LEFT, a
+  jr z, .checkRight
+  
+  ; move left
+  ld a, [BaseX]
+  dec a
+  cp 4 ;The smallest X coord
+  jr nc, .storeLeft
+  ld a, 4
+.storeLeft:
+  ld [BaseX], a
+  
+.checkRight:
+  bit KEY_RIGHT, a
+  jr z, .checkDown
+  
+  ; move right
+  ld a, [BaseX]
+  inc a
+  cp 13 ; The biggest X coord
+  jr c, .storeRight
+  ld a, 13
+.storeRight:
+  ld [BaseX], a
+  
+.checkDown:
+  bit KEY_DOWN, a
+  jr z, .done
+  
+  ; move down
+  ld a, [BaseY]
+  inc a
+  cp 18 ; The biggest Y place 20-2(since our height of Tetromino is 2)
+  jr c, .storeDown
+  ld a, 18
+.storeDown:
+  ld [BaseY], a
+  
+.done:
+  ret
 Pause:
 
   bit 0,c
