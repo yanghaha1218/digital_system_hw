@@ -12,6 +12,8 @@ DEF KEY_LEFT   EQU 5
 DEF KEY_UP     EQU 6
 DEF KEY_DOWN   EQU 7
 
+
+
 SECTION "Header", ROM0[$100]
   jp EntryPoint
 
@@ -21,6 +23,7 @@ EntryPoint:
   call WaitVBlank
   ld a, 0
   ld [rLCDC], a
+
 
   ld a,%11111100 ; black and white palette
   ld [rOBP0], a
@@ -48,9 +51,9 @@ EntryPoint:
   call   ResetBG
   ld a, LCDC_ON | LCDC_OBJ_ON | LCDC_BG_ON | LCDC_BLOCK01
   ld [rLCDC], a
-  ld a,3
+  ld a,4
   ld [BaseX],a
-  ld a,3
+  ld a,4
   ld [BaseY],a
   ld a,0
   ld [FUCK],a
@@ -68,7 +71,6 @@ MainLoop:
 
 
 SECTION "Functions", ROM0
-
 ; Handle the rotation and the move
 HandleInput:
   ; Check the status of paused
@@ -80,9 +82,10 @@ HandleInput:
   ld a, [current]
   
   ; Check the rotation
-  bit 0, a
+  bit KEY_UP, a
   jr z, .checkLeft
   call Rotate
+  ret
   
 .checkLeft:
   bit KEY_LEFT, a
@@ -125,19 +128,32 @@ HandleInput:
   
 .done:
   ret
-Pause:
+  
+Rotate:
+  ld a, [FUCK]
+  add a, 8 ;since each status of rotation has length 8 
+  cp 32 ; upper bound
+  jr c, .store
+  ld a, 0
+.store:
+  ld [FUCK], a
+  
+  ret
 
-  bit 0,c
-  ret z
-  ld a,[FUCK]
-  add a,8
-  ld [FUCK],a
-  ret 
+Pause:
   bit 1,c
   ret z
+  
+  ; change the status of paused
   ld a,[paused]
   xor %00000001
   ld [paused],a
+  
+  ; clear the Key status
+  ld a, 0
+  ld [previous], a
+  ld [current], a
+  
   ret
   
 Scroll:
@@ -147,7 +163,7 @@ ResetBG:
   ld hl,TILEMAP0
   ld bc,1024
 .loop:
-  ld [hl],2 ; fog
+  ld [hl],1 ; blank
   inc hl
   dec bc
   ld a,b
@@ -191,7 +207,7 @@ UpdateObjects:
   ld a,[FUCK]
   ld b,0
   ld c,a
-  ld hl,Tetromino_I
+  ld hl,Tetromino_Z
 
   add hl,bc
   ld d,h
@@ -290,6 +306,47 @@ ResetMap:
   jr nz,.loop
   ret
 
+UpdateBackGround:
+ld a,[BGChanged]
+cp 0
+ret z
+  ld hl,TILEMAP0
+.loop
+.lp1
+  ld a,c
+  cp 0
+  jp z,.break1
+  ld a,l
+  add 32    ;column number
+  jp nc,.notcarray
+  inc h
+.notcarray:
+  ld l,a
+ 
+  dec c
+  jp .lp1
+.break1:
+
+.lp3
+  ld a,d
+  cp 0
+  jp z,.break2
+  inc hl
+  dec d
+  jp .lp3
+.break2
+  ld [hl],1 ; fog
+  
+  pop hl
+
+  inc hl
+  inc hl
+  inc hl
+  dec b
+  jr nz, .loop
+  ret
+
+
 CopyTilesToVRAM:
   ld de, Tiles
   ld hl, STARTOF(VRAM)
@@ -346,21 +403,35 @@ readKeys:
 
 SECTION "Data", ROM0
 
-
+PieceAddressTable:
+    dw Tetromino_I
+    dw Tetromino_J
+    dw Tetromino_L
+    dw Tetromino_O
+    dw Tetromino_S
+    dw Tetromino_Z
+    dw Tetromino_T
 
 Tiles:
 ; smiling face
  DB %01111110
  DB %10000001
- DB %10100101
  DB %10000001
- DB %10100101
- DB %10011001
+ DB %10000001
+ DB %10000001
+ DB %10000001
  DB %10000001
  DB %01111110
 ; blank
-DB 0,0,0,0,0,0,0,0
-DB 0,0,0,0,0,0,0,0
+ DB %00000000
+ DB %00000000
+ DB %00000000
+ DB %00000000
+ DB %00000000
+ DB %00000000
+ DB %00000000
+ DB %00000000
+ 
  ; fog
  DB %10101010
  DB %01010101
@@ -370,16 +441,27 @@ DB 0,0,0,0,0,0,0,0
  DB %01010101
  DB %10101010
  DB %01010101
+ 
+ ; black
+ DB %11111111
+ DB %11111111
+ DB %11111111
+ DB %11111111
+ DB %11111111
+ DB %11111111
+ DB %11111111
+ DB %11111111
 TilesEnd:
+
 Tetromino_I:
 ; rotation 0: degree 0
 DB 1,0,0,0,-1,0,-2,0
 ; rotation 1: degree 90
 DB 0,-1,0,0,0,1,0,2
 ; rotation 2: degree 180
-DB -2,1,-1,1,0,1,1,1
+DB 2,0,1,0,0,0,-1,0
 ; rotation 3: degree 270
-DB -1,-1,-1,0,-1,1,-1,2
+DB 0,2,0,1,0,0,0,-1
 
 Tetromino_J:
 DB -1,-1,-1,0,0,0,1,0
@@ -417,6 +499,7 @@ DB -1,0,0,0,1,0,0,1
 DB 0,1,0,0,0,-1,1,0
 DB 1,0,0,0,-1,0,0,-1
 
+
 SECTION "Variables", WRAM0
 ShadowOAM: DS 160
 Map:DS 180
@@ -426,3 +509,4 @@ current: DS 1
 previous: DS 1
 paused: DS 1
 FUCK:DS 1
+BGChanged:DS 1
